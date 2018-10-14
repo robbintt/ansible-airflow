@@ -1,0 +1,14 @@
+<Virtualhost *:80>
+  ServerAdmin   admin@airflow
+  ServerName    {{ airflow_url }}
+
+  ProxyPass / http://localhost:8080/
+
+  <Directory /var/www/airflow/public_html/>
+    AllowOverride All
+  </Directory>
+
+  # Logfiles
+  ErrorLog /var/www/airflow/public_html/logs/error.log
+  CustomLog /var/www/airflow/public_html/logs/access.log combined
+</VirtualHost>

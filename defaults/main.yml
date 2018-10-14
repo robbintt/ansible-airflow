@@ -1,0 +1,18 @@
+---
+# airflow dev server defaults
+
+airflow_psql_user: "airflow"
+airflow_psql_password: "airflow"
+airflow_psql_hostname: "localhost"
+airflow_psql_db: "airflow_db"
+
+# get a fernet key:
+# >>> from cryptography.fernet import Fernet
+# >>> Fernet.generate_key()
+airflow_fernet_key: "need_valid_fernet_key"
+
+airflow_url: "airflow.dev"
+airflow_flask_secret: "your-fresh-secret"
+
+smtp_host: "your.smtp.host"
+smtp_url: "example.com"

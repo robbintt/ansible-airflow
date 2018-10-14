@@ -1,0 +1,172 @@
+---
+
+- name: Install Postgres Dependencies
+  apt: name={{ item }} state=installed update_cache=yes cache_valid_time=3600
+  with_items:
+    - postgresql-common 
+    - postgresql-client-9.5
+    - postgresql-contrib
+
+- name: Install Airflow DAG Dependencies
+  apt: name={{ item }} state=installed update_cache=yes cache_valid_time=3600
+  with_items:
+    - lftp
+
+# This is used to encrypt sensitive information including psql user passwords
+- name: Install Python's Cryptography Pip Package Dependencies
+  apt: name={{ item }} state=installed update_cache=yes cache_valid_time=3600
+  with_items:
+    - build-essential 
+    - libssl-dev 
+    - libffi-dev 
+    - python3-dev
+
+# issue: apache2_module will not support multiple with_items
+- name: Enable apache module - proxy_http
+  apache2_module:
+    state: present
+    name: "{{ item }}"
+  with_items:
+    proxy_http
+  notify: restart apache2
+
+# note that we use proxypass
+# so this project directory only contains logs
+- name: create airflow project directory
+  file: 
+    path: /var/www/websites/airflow/public_html/logs
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: 0775
+
+- name: create apache2 log files for airflow
+  file:
+    path: /var/www/websites/airflow/public_html/logs/{{ item }}
+    state: touch 
+    owner: www-data
+    group: www-data
+    mode: 0775
+  with_items:
+    - "error.log"
+    - "access.log"
+
+- name: create airflow apache symlink for project directory
+  file:
+    state: link
+    force: yes
+    owner: www-data
+    group: www-data
+    mode: 0775
+    src: /var/www/websites/airflow
+    dest: /var/www/airflow
+
+
+- name: Deploy Example Apache2 Configuration
+  template:
+    src: "airflow.conf.j2"
+    dest: "/etc/apache2/sites-available/airflow.conf"
+    owner: root
+    group: root
+    mode: 0644
+
+- name: enable airflow vhost with a2ensite airflow
+  command: a2ensite airflow
+  notify: restart apache2
+
+
+- name: Add Airflow User
+  user: name={{ item }} shell=/bin/bash groups=www-data append=yes generate_ssh_key=yes
+  with_items:
+    - airflow
+
+
+- name: create airflow path for config, db, etc.
+  file: 
+    path: /home/airflow/airflow
+    state: directory
+    owner: airflow
+    group: airflow 
+    mode: 0775
+
+# default is force!
+- name: deploy airflow configuration
+  template:
+    src: "airflow.cfg.j2"
+    dest: "/home/airflow/airflow/airflow.cfg"
+    owner: airflow
+    group: airflow 
+    mode: 0664
+
+- name: Transfer Airflow requirements.txt
+  template:
+    src: "airflow-venv.requirements.txt"
+    dest: "/home/airflow/airflow-venv.requirements.txt"
+    owner: airflow
+    group: airflow 
+    mode: 0664
+
+
+# add airflow pip requirements globally
+# if you need a virtualenv, it won't work simply by adding the virtualenv and running airflow from that folder
+# this may work, or not: https://medium.com/@vando/airflow-inside-a-virtual-enviroment-and-integrated-with-systemd-3b6427bd6430
+# nb: requirements.txt file is relative to the remote
+- name: Install Airflow globally from requirements.txt - remember these versions are pinned for now - upgrade by changing requirements.txt on a dev server and installing into the playbook - you can install requirements to a virtualenv to generate the file
+  pip:
+    # virtualenv: /home/airflow/airflow-venv
+    requirements: /home/airflow/airflow-venv.requirements.txt
+  # become: true
+  #become_user: airflow
+
+
+# note that when testing this role you must add a local postgres database and user, and include the password in the airflow.cfg file.
+# for production you can specify the remote database without initializing a local one
+# this should be broken out into variables so that configuration can be done in one canonical location with dev. defaults
+#
+# Dev Server Install Directions:
+# # apt install postgresql-9.5 postgresql postgresql-contrib
+# # su postgres
+# $ psql
+# CREATE USER airflow WITH ENCRYPTED PASSWORD 'airflow';
+# CREATE DATABASE airflow OWNER = airflow;
+#
+#
+# this service must have an initalized database
+#   - this is done with the `airflow initdb` command
+- name: airflow initdb - first-time setup as user airflow
+  command: airflow initdb
+  become: true
+  become_user: airflow
+
+
+- name: add airflow systemd environment file
+  template:
+    src: "airflow.systemd.environment.j2"
+    dest: "/home/airflow/airflow/airflow.systemd.environment"
+    owner: airflow
+    group: airflow 
+    mode: 0664
+
+# https://github.com/apache/incubator-airflow/blob/3ac2fba8885b64619ee9d622731708a4e78834e5/scripts/systemd/airflow-webserver.service
+- name: Add systemd service file for airflow webserver airflow@airflow
+  template:
+    src: "airflow@airflow.service"
+    dest: "/etc/systemd/system/airflow@airflow.service"
+  # this also enables airflow
+  notify:
+    restart airflow@airflow
+
+
+# this service run by username: airflow
+# https://github.com/apache/incubator-airflow/blob/3ac2fba8885b64619ee9d622731708a4e78834e5/scripts/systemd/airflow-webserver.service
+- name: Add systemd service file for airflow scheduler airflow@airflow
+  template:
+    src: "airflow-scheduler@airflow.service"
+    dest: "/etc/systemd/system/airflow-scheduler@airflow.service"
+  # this also enables airflow
+  notify:
+    restart airflow-scheduler@airflow
+    
+
+
+

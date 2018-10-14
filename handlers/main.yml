@@ -1,0 +1,19 @@
+
+- name: restart airflow@airflow
+  service:
+    name: airflow@airflow
+    state: restarted
+    enabled: yes
+    daemon-reload: yes
+
+- name: restart airflow-scheduler@airflow
+  service:
+    name: airflow-scheduler@airflow
+    state: restarted
+    enabled: yes
+    daemon-reload: yes
+
+- name: restart apache2
+  service:
+    name: apache2
+    state: restarted
