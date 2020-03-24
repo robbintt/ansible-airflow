@@ -3,7 +3,7 @@ apache-airflow==1.9.0
 asn1crypto==0.24.0
 bcrypt==3.1.4
 beautifulsoup4==4.4.1
-bleach==2.1.2
+bleach==3.1.2
 certifi==2017.7.27.1
 cffi==1.11.2
 chardet==3.0.4
